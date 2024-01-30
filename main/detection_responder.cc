@@ -58,9 +58,9 @@ static void create_gui(void)
 }
 #endif // DISPLAY_SUPPORT
 
-void RespondToDetection(float person_score, float no_person_score) {
-  int person_score_int = (person_score) * 100 + 0.5;
-  (void) no_person_score; // unused
+void RespondToDetection(float left_score, float right_score, float yes_score, float no_score) {
+  // int person_score_int = (person_score) * 100 + 0.5;
+  // (void) no_person_score; // unused
 #if DISPLAY_SUPPORT
     if (!camera_canvas) {
       create_gui();
@@ -77,6 +77,36 @@ void RespondToDetection(float person_score, float no_person_score) {
     lv_canvas_set_buffer(camera_canvas, buf, IMG_WD, IMG_HT, LV_IMG_CF_TRUE_COLOR);
     bsp_display_unlock();
 #endif // DISPLAY_SUPPORT
-  MicroPrintf("person score:%d%%, no person score %d%%",
-              person_score_int, 100 - person_score_int);
+  MicroPrintf("left: %d, right: %d, yes: %d, no: %d\n", (int) (left_score * 100), (int) (right_score * 100), (int) (yes_score * 100), (int) (no_score * 100));
+  int max_score = (int) (left_score * 100);
+  int max_index = 0;
+  if ((int) (right_score * 100) > max_score) {
+    max_score = (int) (right_score * 100);
+    max_index = 1;
+  }
+  if ((int) (yes_score * 100) > max_score) {
+    max_score = (int) (yes_score * 100);
+    max_index = 2;
+  }
+  if ((int) (no_score * 100) > max_score) {
+    max_score = (int) (no_score * 100);
+    max_index = 3;
+  }
+  switch (max_index) {
+    case 0:
+      MicroPrintf("left\n");
+      break;
+    case 1:
+      MicroPrintf("right\n");
+      break;
+    case 2:
+      MicroPrintf("yes\n");
+      break;
+    case 3:
+      MicroPrintf("no\n");
+      break;
+    default:
+      MicroPrintf("unknown\n");
+      break;
+  }
 }

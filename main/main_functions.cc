@@ -18,7 +18,7 @@ limitations under the License.
 #include "detection_responder.h"
 #include "image_provider.h"
 #include "model_settings.h"
-#include "person_detect_model_data.h"
+#include "model.h"
 #include "tensorflow/lite/micro/micro_interpreter.h"
 #include "tensorflow/lite/micro/micro_log.h"
 #include "tensorflow/lite/micro/micro_mutable_op_resolver.h"
@@ -59,7 +59,7 @@ static uint8_t *tensor_arena;//[kTensorArenaSize]; // Maybe we should move this 
 void setup() {
   // Map the model into a usable data structure. This doesn't involve any
   // copying or parsing, it's a very lightweight operation.
-  model = tflite::GetModel(g_person_detect_model_data);
+  model = tflite::GetModel(person_direction);
   if (model->version() != TFLITE_SCHEMA_VERSION) {
     MicroPrintf("Model provided is schema version %d not equal to supported "
                 "version %d.", model->version(), TFLITE_SCHEMA_VERSION);
@@ -82,12 +82,18 @@ void setup() {
   //
   // tflite::AllOpsResolver resolver;
   // NOLINTNEXTLINE(runtime-global-variables)
-  static tflite::MicroMutableOpResolver<5> micro_op_resolver;
-  micro_op_resolver.AddAveragePool2D();
+  static tflite::MicroMutableOpResolver<7> micro_op_resolver;
+  // micro_op_resolver.AddAveragePool2D();
   micro_op_resolver.AddConv2D();
   micro_op_resolver.AddDepthwiseConv2D();
-  micro_op_resolver.AddReshape();
+  // micro_op_resolver.AddReshape();
   micro_op_resolver.AddSoftmax();
+  //
+  micro_op_resolver.AddQuantize();
+  micro_op_resolver.AddPad();
+  micro_op_resolver.AddMean();
+  micro_op_resolver.AddFullyConnected();
+  
 
   // Build an interpreter to run the model with.
   // NOLINTNEXTLINE(runtime-global-variables)
@@ -131,16 +137,29 @@ void loop() {
   TfLiteTensor* output = interpreter->output(0);
 
   // Process the inference results.
-  int8_t person_score = output->data.uint8[kPersonIndex];
-  int8_t no_person_score = output->data.uint8[kNotAPersonIndex];
+  int8_t left_person_score = output->data.uint8[kLeftPersonIndex];
+  int8_t right_person_score = output->data.uint8[kRightPersonIndex];
+  int8_t yes_person_score = output->data.uint8[kYesPersonIndex];
+  int8_t no_person_score = output->data.uint8[kNoPersonIndex];
 
-  float person_score_f =
-      (person_score - output->params.zero_point) * output->params.scale;
+  // int8_t person_score = output->data.uint8[kPersonIndex];
+  // int8_t no_person_score = output->data.uint8[kNotAPersonIndex];
+
+  float left_person_score_f =
+      (left_person_score - output->params.zero_point) * output->params.scale;
+  float right_person_score_f =
+      (right_person_score - output->params.zero_point) * output->params.scale;
+  float yes_person_score_f =
+      (yes_person_score - output->params.zero_point) * output->params.scale;
   float no_person_score_f =
       (no_person_score - output->params.zero_point) * output->params.scale;
+  // float person_score_f =
+  //     (person_score - output->params.zero_point) * output->params.scale;
+  // float no_person_score_f =
+  //     (no_person_score - output->params.zero_point) * output->params.scale;
 
   // Respond to detection
-  RespondToDetection(person_score_f, no_person_score_f);
+  RespondToDetection(left_person_score_f, right_person_score_f, yes_person_score_f, no_person_score_f);
   vTaskDelay(1); // to avoid watchdog trigger
 }
 #endif
@@ -196,12 +215,21 @@ void run_inference(void *ptr) {
   TfLiteTensor* output = interpreter->output(0);
 
   // Process the inference results.
-  int8_t person_score = output->data.uint8[kPersonIndex];
-  int8_t no_person_score = output->data.uint8[kNotAPersonIndex];
+  // int8_t person_score = output->data.uint8[kPersonIndex];
+  // int8_t no_person_score = output->data.uint8[kNotAPersonIndex];
+  int8_t left_person_score = output->data.uint8[kLeftPersonIndex];
+  int8_t right_person_score = output->data.uint8[kRightPersonIndex];
+  int8_t yes_person_score = output->data.uint8[kYesPersonIndex];
+  int8_t no_person_score = output->data.uint8[kNoPersonIndex];
 
-  float person_score_f =
-      (person_score - output->params.zero_point) * output->params.scale;
+  float left_person_score_f =
+      (left_person_score - output->params.zero_point) * output->params.scale;
+  float right_person_score_f =
+      (right_person_score - output->params.zero_point) * output->params.scale;
+  float yes_person_score_f =
+      (yes_person_score - output->params.zero_point) * output->params.scale;
   float no_person_score_f =
-      (no_person_score - output->params.zero_point) * output->params.scale;
-  RespondToDetection(person_score_f, no_person_score_f);
+      (no_person_score - output->params.zero_point) * output->params.scale; 
+
+  RespondToDetection(left_person_score_f, right_person_score_f, yes_person_score_f, no_person_score_f);
 }
